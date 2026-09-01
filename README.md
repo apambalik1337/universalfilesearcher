@@ -180,6 +180,6 @@ Currently not supported:
 
 # 👨‍💻 Author
 
-Developed by **Muhammad Amin Zikri**.
+Developed by **ApamBalik1337**.
 
 ⭐ If you find this project useful, please consider giving the repository a star!
