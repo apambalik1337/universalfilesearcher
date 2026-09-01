@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Universal File Searcher</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --panel-3: #262b36;
+    --border: #2a2f3a; --text: #e8eaed; --muted: #9aa0ac;
+    --accent: #4f8cff; --accent-2: #2ecc8f; --danger: #ff5d6c; --warn: #f5b942;
+    --radius: 10px;
+  }
+  html[data-theme="light"] {
+    --bg: #f4f5f7; --panel: #ffffff; --panel-2: #f0f1f4; --panel-3: #e6e8ec;
+    --border: #dde0e6; --text: #1b1e24; --muted: #6b7280;
+    --accent: #3b6fe0; --accent-2: #19a374; --danger: #e0384a; --warn: #b8790f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); transition: background 0.15s ease, color 0.15s ease; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 28px 20px 100px; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 10px; margin-bottom: 4px; justify-content: space-between; }
+  h1 .title-group { display: flex; align-items: center; gap: 10px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .theme-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 7px 11px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
+
+  .folder-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=number] { flex: 1; min-width: 220px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 11px 14px; border-radius: 8px; font-size: 14px; outline: none; }
+  input[type=text]:focus, input[type=number]:focus { border-color: var(--accent); }
+
+  button { background: var(--accent); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: opacity 0.15s ease; white-space: nowrap; }
+  button:hover { opacity: 0.88; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .current-folder { margin-top: 10px; font-size: 12.5px; color: var(--muted); word-break: break-all; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .current-folder b { color: var(--text); }
+
+  .status-line { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 10px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .status-dot.ok { background: var(--accent-2); }
+  .status-dot.warn { background: var(--warn); }
+  .status-dot.busy { background: var(--accent); animation: pulse 1s infinite ease-in-out; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .status-text { color: var(--muted); }
+  .status-text b { color: var(--text); font-weight: 600; }
+
+  .progress-track { height: 6px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-top: 10px; display: none; }
+  .progress-track.active { display: block; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 0%; transition: width 0.2s ease; }
+  .current-file-label { font-size: 11.5px; color: var(--muted); margin-top: 6px; word-break: break-all; }
+
+  details.issues { margin-top: 10px; }
+  details.issues summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+  .issues-content { margin-top: 8px; font-size: 12.5px; color: var(--muted); max-height: 220px; overflow-y: auto; }
+  .issues-content ul { margin: 4px 0 10px 18px; padding: 0; }
+
+  .supported-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .tag { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
+
+  .settings-toggle, .filters-toggle { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; cursor: pointer; font-size: 12.5px; color: var(--muted); user-select: none; }
+  .settings-toggle .chevron, .filters-toggle .chevron { transition: transform 0.15s ease; }
+  .settings-toggle.open .chevron, .filters-toggle.open .chevron { transform: rotate(180deg); }
+  .settings-body, .filters-body { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .settings-body.open, .filters-body.open { display: block; }
+  .settings-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .settings-row label { font-size: 12.5px; color: var(--muted); min-width: 160px; }
+  .settings-row input { max-width: 140px; }
+  .settings-row input.wide { max-width: 320px; }
+  .settings-hint { font-size: 11px; color: var(--muted); margin-top: -4px; margin-bottom: 10px; }
+
+  .search-row { display: flex; gap: 8px; }
+  .search-row input[type=text] { font-size: 15px; padding: 13px 16px; }
+
+  .search-options { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .search-options label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .search-options input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+
+  .filter-group { margin-bottom: 12px; }
+  .filter-group-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 6px; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filter-chip { font-size: 12px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); cursor: pointer; user-select: none; }
+  .filter-chip.active { background: rgba(79,140,255,0.18); border-color: var(--accent); color: var(--accent); }
+  .scope-row { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+  .scope-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .sort-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-size: 12.5px; outline: none; }
+
+  .results-summary { display: flex; justify-content: space-between; align-items: flex-start; margin: 20px 0 12px; flex-wrap: wrap; gap: 10px; }
+  .results-summary-main { font-size: 14px; font-weight: 600; }
+  .breakdown-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .breakdown-chip { font-size: 11.5px; padding: 4px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+
+  .file-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+  .file-card-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; gap: 12px; }
+  .file-card-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .file-card-title .icon { font-size: 17px; flex-shrink: 0; }
+  .file-card-title .names { min-width: 0; }
+  .file-card-title .fname { font-weight: 600; font-size: 14.5px; }
+  .file-card-title .fpath { font-size: 11px; color: var(--muted); word-break: break-all; margin-top: 2px; }
+  .file-card-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .badge { font-size: 10.5px; padding: 3px 8px; border-radius: 999px; background: var(--panel-3); color: var(--muted); border: 1px solid var(--border); }
+  .match-count-badge { font-size: 11.5px; padding: 3px 10px; border-radius: 999px; background: rgba(79,140,255,0.15); color: var(--accent); font-weight: 600; }
+
+  .matches-list { display: block; border-top: 1px solid var(--border); }
+  .match-row { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .match-row:last-child { border-bottom: none; }
+  .match-row:hover { background: var(--panel-2); }
+  .match-location { font-size: 12px; color: var(--accent); font-weight: 500; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+  .match-location .filename-tag { font-size: 10px; padding: 1px 7px; border-radius: 999px; background: rgba(46,204,143,0.15); color: var(--accent-2); }
+  .match-snippet { font-size: 13.5px; line-height: 1.5; color: var(--text); }
+  .match-snippet mark { background: rgba(79,140,255,0.35); color: #fff; padding: 0 2px; border-radius: 3px; }
+
+  .file-actions { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--border); }
+  .file-actions button { padding: 6px 12px; font-size: 12px; }
+
+  .empty-state { text-align: center; color: var(--muted); padding: 40px 10px; font-size: 14px; }
+  .empty-state .suggestions { text-align: left; max-width: 320px; margin: 16px auto 0; font-size: 13px; }
+  .empty-state .suggestions li { margin-bottom: 4px; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; max-width: 90%; text-align: center; z-index: 50; }
+  .toast.show { opacity: 1; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: flex-start; justify-content: center; padding: 60px 16px; z-index: 40; }
+  .overlay.show { display: flex; }
+  .preview-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); max-width: 560px; width: 100%; padding: 20px 22px; max-height: 80vh; overflow-y: auto; }
+  .preview-panel .p-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+  .preview-panel .p-title { font-size: 15.5px; font-weight: 700; }
+  .preview-panel .p-path { font-size: 11px; color: var(--muted); word-break: break-all; margin-top: 3px; }
+  .preview-panel .p-close { background: transparent; color: var(--muted); border: none; font-size: 18px; padding: 2px 8px; cursor: pointer; }
+  .preview-panel .p-location { font-size: 12.5px; color: var(--accent); font-weight: 500; margin-bottom: 10px; }
+  .preview-panel .p-snippet { font-size: 14px; line-height: 1.6; background: var(--panel-2); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .preview-panel .p-snippet mark { background: rgba(79,140,255,0.35); color: #fff; padding: 0 2px; border-radius: 3px; }
+  .preview-panel .p-actions { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>
+    <span class="title-group">🔎 Universal File Searcher</span>
+    <button class="theme-btn" id="themeBtn" title="Toggle light/dark">🌙</button>
+  </h1>
+  <div class="subtitle" id="subtitleText">Search across many local file types from one search box — everything stays local.</div>
+
+  <div class="panel">
+    <div class="folder-row">
+      <input type="text" id="folderInput" placeholder="Paste or type full folder path, e.g. D:\\MyData" />
+      <button id="browseBtn" class="secondary">Browse…</button>
+      <button id="indexBtn">Choose Main Folder &amp; Index</button>
+      <button id="rescanBtn" class="secondary" style="display:none;">Rescan</button>
+    </div>
+    <div class="current-folder" id="currentFolder">No folder indexed yet.</div>
+
+    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="current-file-label" id="currentFileLabel"></div>
+
+    <div class="status-line" id="statusLine" style="display:none;">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText"></span>
+    </div>
+
+    <details class="issues" id="issuesDetails" style="display:none;">
+      <summary>View failed / skipped / unsupported files</summary>
+      <div class="issues-content" id="issuesContent"></div>
+    </details>
+
+    <div class="supported-row" id="supportedRow"></div>
+
+    <div class="settings-toggle" id="settingsToggle">
+      <span>⚙ Indexing settings</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="settings-body" id="settingsBody">
+      <div class="settings-row">
+        <label for="maxFileSizeInput">Max file size (MB)</label>
+        <input type="number" id="maxFileSizeInput" min="0" step="1" value="200" />
+      </div>
+      <div class="settings-hint">Files larger than this are skipped during indexing (0 = no limit). Useful for huge exports or media-heavy files.</div>
+      <div class="settings-row">
+        <label for="skipDirsInput">Extra folders to skip</label>
+        <input type="text" class="wide" id="skipDirsInput" placeholder="e.g. Backups, Archive, tmp" />
+      </div>
+      <div class="settings-hint">Comma-separated folder names to exclude, in addition to the built-in defaults (.git, node_modules, etc). Applied on the next index/rescan.</div>
+      <div class="settings-row">
+        <label for="forceFullInput">Force full re-index</label>
+        <input type="checkbox" id="forceFullInput" />
+      </div>
+      <div class="settings-hint">Rescanning the same folder normally only re-reads files that changed since last time. Check this to re-parse every file from scratch instead.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="search-row">
+      <input type="text" id="searchInput" placeholder="Search names or keywords... (Ctrl+K)" />
+      <button id="searchBtn">Search</button>
+    </div>
+
+    <div class="search-options">
+      <label><input type="checkbox" id="optContent" checked /> Search file contents</label>
+      <label><input type="checkbox" id="optFilenames" checked /> Search file names</label>
+    </div>
+
+    <div class="filters-toggle" id="filtersToggle">
+      <span>Filters &amp; sort</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="filters-body" id="filtersBody">
+      <div class="filter-group">
+        <div class="filter-group-title">Search in</div>
+        <div class="filter-chips" id="categoryChips"></div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-title">Search within</div>
+        <div class="scope-row">
+          <label><input type="radio" name="scope" value="recursive" checked /> Current main folder (recursive)</label>
+          <label><input type="radio" name="scope" value="current" /> Current folder only</label>
+        </div>
+      </div>
+      <div class="filter-group sort-row">
+        <span class="filter-group-title" style="margin:0;">Sort by</span>
+        <select id="sortSelect">
+          <option value="relevance">Relevance</option>
+          <option value="name">File Name</option>
+          <option value="type">File Type</option>
+          <option value="path">File Path</option>
+          <option value="matches">Number of Matches</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-summary" id="resultsSummary" style="display:none;">
+    <div class="results-summary-main" id="resultsSummaryMain"></div>
+    <div class="breakdown-row" id="breakdownRow"></div>
+  </div>
+
+  <div id="results"><div class="empty-state">Index a folder, then search for a name or keyword.</div></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="overlay">
+  <div class="preview-panel" id="previewPanel"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const folderInput = $('folderInput');
+const browseBtn = $('browseBtn');
+const indexBtn = $('indexBtn');
+const rescanBtn = $('rescanBtn');
+const currentFolder = $('currentFolder');
+const progressTrack = $('progressTrack');
+const progressFill = $('progressFill');
+const currentFileLabel = $('currentFileLabel');
+const statusLine = $('statusLine');
+const statusDot = $('statusDot');
+const statusText = $('statusText');
+const issuesDetails = $('issuesDetails');
+const issuesContent = $('issuesContent');
+const supportedRow = $('supportedRow');
+const settingsToggle = $('settingsToggle');
+const settingsBody = $('settingsBody');
+const maxFileSizeInput = $('maxFileSizeInput');
+const skipDirsInput = $('skipDirsInput');
+const forceFullInput = $('forceFullInput');
+const searchInput = $('searchInput');
+const searchBtn = $('searchBtn');
+const optContent = $('optContent');
+const optFilenames = $('optFilenames');
+const filtersToggle = $('filtersToggle');
+const filtersBody = $('filtersBody');
+const categoryChips = $('categoryChips');
+const sortSelect = $('sortSelect');
+const resultsSummary = $('resultsSummary');
+const resultsSummaryMain = $('resultsSummaryMain');
+const breakdownRow = $('breakdownRow');
+const resultsDiv = $('results');
+const toast = $('toast');
+const overlay = $('overlay');
+const previewPanel = $('previewPanel');
+const themeBtn = $('themeBtn');
+
+let pollTimer = null;
+let allCategories = [];
+let activeCategories = new Set();
+let lastQuery = '';
+
+/* ---------- Theme (persisted locally in this browser only) ---------- */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  themeBtn.textContent = theme === 'light' ? '☀️' : '🌙';
+}
+(function initTheme() {
+  const saved = localStorage.getItem('ufs_theme') || 'dark';
+  applyTheme(saved);
+})();
+themeBtn.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = current === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  localStorage.setItem('ufs_theme', next);
+});
+
+/* ---------- Remember last folder + settings locally ---------- */
+(function restoreLocalPrefs() {
+  const savedFolder = localStorage.getItem('ufs_last_folder');
+  if (savedFolder) folderInput.value = savedFolder;
+  const savedMaxSize = localStorage.getItem('ufs_max_file_size_mb');
+  if (savedMaxSize !== null) maxFileSizeInput.value = savedMaxSize;
+  const savedSkipDirs = localStorage.getItem('ufs_skip_dirs');
+  if (savedSkipDirs !== null) skipDirsInput.value = savedSkipDirs;
+})();
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function escapeHtml(str) {
+  return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function highlight(text, terms) {
+  const safe = escapeHtml(text);
+  const cleaned = (terms || []).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).filter(Boolean);
+  if (cleaned.length === 0) return safe;
+  const re = new RegExp('(' + cleaned.join('|') + ')', 'ig');
+  return safe.replace(re, '<mark>$1</mark>');
+}
+
+function queryTerms(q) {
+  return (q || '').split(/\s+/).filter(t => t && t.toUpperCase() !== 'AND' && t.toUpperCase() !== 'OR');
+}
+
+/* ---------- Supported formats / filters / settings ---------- */
+
+async function loadSupported() {
+  const res = await fetch('/api/supported');
+  const data = await res.json();
+  supportedRow.innerHTML = '';
+  data.extensions.forEach(ext => {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = '✓ ' + ext.replace('.', '').toUpperCase();
+    supportedRow.appendChild(tag);
+  });
+  $('subtitleText').textContent = `Search across ${data.extensions.length} local file types from one search box — everything stays local.`;
+  allCategories = data.categories;
+  renderCategoryChips();
+  renderIssues(data.failed, data.unsupported, data.skipped);
+  if (data.settings) {
+    if (!localStorage.getItem('ufs_max_file_size_mb') && data.settings.max_file_size_mb !== undefined) {
+      maxFileSizeInput.value = data.settings.max_file_size_mb;
+    }
+    if (!localStorage.getItem('ufs_skip_dirs') && data.settings.extra_skip_dirs) {
+      skipDirsInput.value = data.settings.extra_skip_dirs;
+    }
+  }
+  if (data.stats && data.stats.total > 0) {
+    statusLine.style.display = 'flex';
+    updateStatusLine(data.stats);
+    rescanBtn.style.display = 'inline-block';
+  }
+  return data;
+}
+
+function renderCategoryChips() {
+  categoryChips.innerHTML = '';
+  const allChip = document.createElement('span');
+  allChip.className = 'filter-chip' + (activeCategories.size === 0 ? ' active' : '');
+  allChip.textContent = 'All Files';
+  allChip.addEventListener('click', () => { activeCategories.clear(); renderCategoryChips(); if (lastQuery) doSearch(); });
+  categoryChips.appendChild(allChip);
+
+  allCategories.forEach(cat => {
+    const chip = document.createElement('span');
+    chip.className = 'filter-chip' + (activeCategories.has(cat) ? ' active' : '');
+    chip.textContent = cat;
+    chip.addEventListener('click', () => {
+      if (activeCategories.has(cat)) activeCategories.delete(cat);
+      else activeCategories.add(cat);
+      renderCategoryChips();
+      if (lastQuery) doSearch();
+    });
+    categoryChips.appendChild(chip);
+  });
+}
+
+filtersToggle.addEventListener('click', () => {
+  filtersToggle.classList.toggle('open');
+  filtersBody.classList.toggle('open');
+});
+settingsToggle.addEventListener('click', () => {
+  settingsToggle.classList.toggle('open');
+  settingsBody.classList.toggle('open');
+});
+maxFileSizeInput.addEventListener('change', () => localStorage.setItem('ufs_max_file_size_mb', maxFileSizeInput.value));
+skipDirsInput.addEventListener('change', () => localStorage.setItem('ufs_skip_dirs', skipDirsInput.value));
+
+function renderIssues(failed, unsupported, skipped) {
+  const any = (failed && failed.length) || (unsupported && unsupported.length) || (skipped && skipped.length);
+  if (!any) { issuesDetails.style.display = 'none'; return; }
+  issuesDetails.style.display = 'block';
+  let html = '';
+  if (failed && failed.length) {
+    html += '<b>❌ Failed (' + failed.length + '):</b><ul>' + failed.map(f => `<li>${escapeHtml(f.file_name)} — ${escapeHtml(f.error || '')}</li>`).join('') + '</ul>';
+  }
+  if (skipped && skipped.length) {
+    html += '<b>⏭ Skipped (' + skipped.length + '):</b><ul>' + skipped.map(f => `<li>${escapeHtml(f.file_name)} — ${escapeHtml(f.error || '')}</li>`).join('') + '</ul>';
+  }
+  if (unsupported && unsupported.length) {
+    html += '<b>⚠ Unsupported (' + unsupported.length + '):</b><ul>' + unsupported.slice(0, 50).map(f => `<li>${escapeHtml(f.file_name)}</li>`).join('') + (unsupported.length > 50 ? `<li>...and ${unsupported.length - 50} more</li>` : '') + '</ul>';
+  }
+  issuesContent.innerHTML = html;
+}
+
+/* ---------- Indexing ---------- */
+
+browseBtn.addEventListener('click', async () => {
+  browseBtn.disabled = true;
+  browseBtn.textContent = 'Waiting for dialog…';
+  try {
+    const res = await fetch('/api/browse-folder', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok && data.folder) folderInput.value = data.folder;
+    else if (!data.ok) showToast(data.message || 'Could not open folder dialog — type the path manually.');
+  } catch (e) {
+    showToast('Native picker unavailable — type the folder path manually.');
+  } finally {
+    browseBtn.disabled = false;
+    browseBtn.textContent = 'Browse…';
+  }
+});
+
+indexBtn.addEventListener('click', async () => {
+  const folder = folderInput.value.trim();
+  if (!folder) { showToast('Enter a folder path first.'); return; }
+  localStorage.setItem('ufs_last_folder', folder);
+  localStorage.setItem('ufs_max_file_size_mb', maxFileSizeInput.value);
+  localStorage.setItem('ufs_skip_dirs', skipDirsInput.value);
+  const res = await fetch('/api/index', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder,
+      max_file_size_mb: maxFileSizeInput.value,
+      extra_skip_dirs: skipDirsInput.value,
+      force_full: forceFullInput.checked,
+    })
+  });
+  const data = await res.json();
+  if (!data.ok) { showToast(data.message); return; }
+  currentFolder.innerHTML = 'Current Folder: <b>' + escapeHtml(folder) + '</b>';
+  statusLine.style.display = 'flex';
+  progressTrack.classList.add('active');
+  startPolling();
+});
+
+rescanBtn.addEventListener('click', async () => {
+  const res = await fetch('/api/rescan', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force_full: forceFullInput.checked }),
+  });
+  const data = await res.json();
+  if (!data.ok) { showToast(data.message); return; }
+  if (data.folder) folderInput.value = data.folder;
+  progressTrack.classList.add('active');
+  startPolling();
+});
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollProgress, 500);
+  pollProgress();
+}
+
+async function pollProgress() {
+  const res = await fetch('/api/progress');
+  const p = await res.json();
+
+  const total = p.total_files_found || 0;
+  const processed = p.processed || 0;
+  const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : (p.status === 'scanning' ? 5 : 0);
+  progressFill.style.width = pct + '%';
+  currentFileLabel.textContent = p.current_file ? ('Indexed: ' + p.current_file) : '';
+
+  if (p.status === 'scanning' || p.status === 'indexing') {
+    statusDot.className = 'status-dot busy';
+    statusText.textContent = p.status === 'scanning' ? 'Scanning folder…' : `Indexing (${processed}/${total})…`;
+  }
+
+  if (p.status === 'ready' || p.status === 'error') {
+    clearInterval(pollTimer);
+    progressTrack.classList.remove('active');
+    if (p.status === 'error') {
+      statusDot.className = 'status-dot warn';
+      statusText.textContent = 'Indexing error: ' + (p.error || 'unknown error');
+      showToast('Indexing error — see status above.');
+    } else {
+      updateStatusLine(p.stats);
+      rescanBtn.style.display = 'inline-block';
+      const skippedMsg = p.stats && p.stats.skipped ? `, ${p.stats.skipped} skipped (too large)` : '';
+      const unchangedMsg = p.mode === 'incremental' && p.unchanged ? `, ${p.unchanged} unchanged (skipped)` : '';
+      showToast(`Indexing complete: ${p.indexed} indexed, ${p.failed} failed, ${p.unsupported} unsupported${skippedMsg}${unchangedMsg}.`);
+    }
+    loadSupported();
+  }
+}
+
+function updateStatusLine(stats) {
+  if (!stats) return;
+  if (stats.failed > 0) {
+    statusDot.className = 'status-dot warn';
+    statusText.innerHTML = `⚠ Index completed with <b>${stats.failed}</b> error(s) — <b>${stats.indexed}</b> files indexed`;
+  } else {
+    statusDot.className = 'status-dot ok';
+    statusText.innerHTML = `● <b>${stats.indexed}</b> files indexed — Index up to date`;
+  }
+}
+
+/* ---------- Search ---------- */
+
+function currentSearchParams(q) {
+  const params = new URLSearchParams();
+  params.set('q', q);
+  params.set('search_content', optContent.checked ? '1' : '0');
+  params.set('search_filenames', optFilenames.checked ? '1' : '0');
+  params.set('sort', sortSelect.value);
+  const scope = document.querySelector('input[name="scope"]:checked').value;
+  params.set('scope', scope);
+  if (activeCategories.size > 0) params.set('categories', Array.from(activeCategories).join(','));
+  return params;
+}
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) return;
+  lastQuery = q;
+  resultsDiv.innerHTML = '<div class="empty-state">Searching…</div>';
+  resultsSummary.style.display = 'none';
+  const params = currentSearchParams(q);
+  const res = await fetch('/api/search?' + params.toString());
+  const data = await res.json();
+  renderResults(data, q);
+}
+
+function renderResults(data, q) {
+  const terms = queryTerms(q);
+
+  if (!data.files || data.files.length === 0) {
+    resultsSummary.style.display = 'none';
+    resultsDiv.innerHTML = `
+      <div class="empty-state">
+        No results found for "<b>${escapeHtml(q)}</b>"
+        <ul class="suggestions">
+          <li>• Check the spelling</li>
+          <li>• Search a shorter keyword</li>
+          <li>${activeCategories.size > 0 ? '• Search all file types (clear filters)' : ''}</li>
+        </ul>
+      </div>`;
+    return;
+  }
+
+  resultsSummary.style.display = 'flex';
+  resultsSummaryMain.innerHTML = `Found <b>${data.total_matches}</b> match${data.total_matches === 1 ? '' : 'es'} across <b>${data.total_files}</b> file${data.total_files === 1 ? '' : 's'}`;
+  breakdownRow.innerHTML = '';
+  Object.entries(data.breakdown || {}).forEach(([cat, count]) => {
+    const chip = document.createElement('span');
+    chip.className = 'breakdown-chip';
+    chip.textContent = `${cat}: ${count} file${count === 1 ? '' : 's'}`;
+    breakdownRow.appendChild(chip);
+  });
+
+  resultsDiv.innerHTML = '';
+  data.files.forEach((f) => {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+
+    card.innerHTML = `
+      <div class="file-card-header">
+        <div class="file-card-title">
+          <span class="icon">${f.icon}</span>
+          <div class="names">
+            <div class="fname">${escapeHtml(f.file_name)}</div>
+            <div class="fpath">${escapeHtml(f.file_path)}</div>
+          </div>
+        </div>
+        <div class="file-card-meta">
+          <span class="badge">${escapeHtml(f.category)}</span>
+          <span class="match-count-badge">${f.match_count} match${f.match_count === 1 ? '' : 'es'}</span>
+        </div>
+      </div>
+      <div class="matches-list"></div>
+      <div class="file-actions">
+        <button class="secondary open-file">Open File</button>
+        <button class="secondary open-folder">Open Folder</button>
+        <button class="secondary copy-path">Copy Path</button>
+      </div>
+    `;
+
+    const matchesList = card.querySelector('.matches-list');
+    f.matches.forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'match-row';
+      const locLabel = buildLocationLabel(m);
+      row.innerHTML = `
+        <div class="match-location">
+          ${m.match_type === 'filename' ? '<span class="filename-tag">Filename Match</span>' : (locLabel ? locLabel : '<span class="filename-tag" style="background:rgba(79,140,255,0.15);color:var(--accent);">Content Match</span>')}
+        </div>
+        <div class="match-snippet">${highlight(m.snippet, terms)}</div>
+      `;
+      row.addEventListener('click', () => openPreview(f, m, terms));
+      matchesList.appendChild(row);
+    });
+
+    card.querySelector('.open-file').addEventListener('click', e => { e.stopPropagation(); openPath('/api/open-file', f.file_path); });
+    card.querySelector('.open-folder').addEventListener('click', e => { e.stopPropagation(); openPath('/api/open-folder', f.file_path); });
+    card.querySelector('.copy-path').addEventListener('click', e => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(f.file_path).then(() => showToast('Path copied.'));
+    });
+
+    resultsDiv.appendChild(card);
+  });
+}
+
+function buildLocationLabel(m) {
+  const parts = [];
+  if (m.sheet) parts.push('Sheet: ' + escapeHtml(m.sheet));
+  if (m.cell) parts.push('Cell: ' + escapeHtml(m.cell));
+  if (m.row_num !== null && m.row_num !== undefined) parts.push('Row: ' + m.row_num);
+  if (m.column_name) parts.push('Column: ' + escapeHtml(m.column_name));
+  if (m.page !== null && m.page !== undefined) parts.push('Page: ' + m.page);
+  if (m.slide !== null && m.slide !== undefined) parts.push('Slide: ' + m.slide);
+  if (m.location) parts.push(escapeHtml(m.location));
+  return parts.join(' • ');
+}
+
+/* ---------- Preview panel ---------- */
+
+function openPreview(f, m, terms) {
+  const locLabel = buildLocationLabel(m);
+  previewPanel.innerHTML = `
+    <div class="p-header">
+      <div>
+        <div class="p-title">${f.icon} ${escapeHtml(f.file_name)}</div>
+        <div class="p-path">${escapeHtml(f.file_path)}</div>
+      </div>
+      <button class="p-close">✕</button>
+    </div>
+    ${locLabel ? `<div class="p-location">${locLabel}</div>` : ''}
+    <div class="p-snippet">${highlight(m.snippet, terms)}</div>
+    <div class="p-actions">
+      <button class="open-file">Open File</button>
+      <button class="secondary open-folder">Open Folder</button>
+      <button class="secondary copy-path">Copy Path</button>
+    </div>
+  `;
+  previewPanel.querySelector('.p-close').addEventListener('click', closePreview);
+  previewPanel.querySelector('.open-file').addEventListener('click', () => openPath('/api/open-file', f.file_path));
+  previewPanel.querySelector('.open-folder').addEventListener('click', () => openPath('/api/open-folder', f.file_path));
+  previewPanel.querySelector('.copy-path').addEventListener('click', () => {
+    navigator.clipboard.writeText(f.file_path).then(() => showToast('Path copied.'));
+  });
+  overlay.classList.add('show');
+}
+
+function closePreview() { overlay.classList.remove('show'); }
+overlay.addEventListener('click', e => { if (e.target === overlay) closePreview(); });
+
+async function openPath(endpoint, path) {
+  const res = await fetch(endpoint, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path })
+  });
+  const data = await res.json();
+  if (!data.ok) showToast(data.message || 'Could not open.');
+}
+
+/* ---------- Events ---------- */
+
+searchBtn.addEventListener('click', doSearch);
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+  if (e.key === 'Escape') { searchInput.value = ''; resultsDiv.innerHTML = '<div class="empty-state">Index a folder, then search for a name or keyword.</div>'; resultsSummary.style.display = 'none'; }
+});
+[optContent, optFilenames, sortSelect].forEach(el => {
+  el.addEventListener('change', () => { if (lastQuery) doSearch(); });
+});
+document.querySelectorAll('input[name="scope"]').forEach(el => el.addEventListener('change', () => { if (lastQuery) doSearch(); }));
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+  if (e.key === 'Escape' && overlay.classList.contains('show')) closePreview();
+});
+
+loadSupported();
+</script>
+</body>
+</html>
